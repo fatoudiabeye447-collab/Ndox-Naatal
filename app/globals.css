@@ -1055,19 +1055,118 @@ footer span {
 }
 
 @media (max-width: 768px) {
-  .sidebar { display: none; }
-  main { margin: 0; padding: 20px 16px; }
-  header { align-items: flex-start; }
-  .top-right .date { display: none; }
-  .toolbar { flex-wrap: wrap; gap: 14px; }
-  .connection { border: 0; padding: 0; }
-  .toolbar button { margin-left: 0; }
-  .toolbar > small { margin-left: auto; }
-  .cards { grid-template-columns: 1fr; }
-  .two-col, .bottom { grid-template-columns: 1fr; }
-  .section-title { align-items: flex-start; }
-  .legend { display: none; }
-  .thresholds { grid-template-columns: repeat(2, 1fr); }
-  .nut { grid-template-columns: 1fr 80px; }
-  .nut .track { grid-column: 1/3; order: 3; }
+  html, body {
+    overflow-x: hidden;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  main {
+    margin: 0;
+    padding: 16px 14px 40px;
+    max-width: 100%;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+
+  header h1 {
+    font-size: 21px;
+  }
+
+  .top-right .date {
+    display: none;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .connection {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    padding-left: 0;
+    padding-top: 10px;
+  }
+
+  .toolbar button {
+    width: 100%;
+    margin-left: 0;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .toolbar > small {
+    margin-left: 0;
+    text-align: center;
+    display: block;
+  }
+
+  .crop-panel {
+    padding: 14px;
+  }
+
+  .chip {
+    padding: 8px 12px;
+    font-size: 11.5px;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .two-col,
+  .bottom {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .pump-btns {
+    flex-direction: column;
+  }
+
+  .pump-btns .btn {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+  }
+
+  .advice {
+    padding: 14px;
+  }
+
+  .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 16px;
+  }
+
+  .legend {
+    display: none;
+  }
+
+  .thresholds {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .nut {
+    grid-template-columns: 1fr 80px;
+  }
+
+  .nut .track {
+    grid-column: 1 / 3;
+    order: 3;
+  }
 }
