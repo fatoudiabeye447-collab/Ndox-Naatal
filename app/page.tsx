@@ -1,3 +1,5 @@
+import Script from "next/script";
+
 export default function DashboardPage() {
   return (
     <>
@@ -183,7 +185,7 @@ export default function DashboardPage() {
         <footer>© 2026 NDox et Naatal · Prototype IoT agricole <span>Les valeurs et actions marquées simulées sont fictives.</span></footer>
       </main>
 
-      <script src="/dashboard.js" defer></script>
+      <Script src="/dashboard.js" strategy="lazyOnload" />
     </>
   );
 }

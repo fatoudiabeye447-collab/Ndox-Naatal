@@ -1,88 +1,237 @@
-// lib/database.ts — SQLite via better-sqlite3 (compatible Vercel /tmp)
-import Database from "better-sqlite3";
-import path from "path";
+// lib/database.ts — Stockage données fiable pour Vercel (zéro dépendance native)
 import fs from "fs";
+import path from "path";
+
+export interface Esp32Record {
+  id: number;
+  parcel: string;
+  soil_moisture: number;
+  air_temperature: number;
+  air_humidity: number;
+  received_at: string;
+}
+
+export interface ReadingRecord {
+  id: number;
+  ts: string;
+  parcel: string;
+  crop: string;
+  phase: string;
+  mode: string;
+  soil_moisture: number;
+  air_temperature: number;
+  air_humidity: number;
+  ph: number;
+  salinity: number;
+  nitrogen: number;
+  phosphorus: number;
+  potassium: number;
+  moisture_min: number;
+  moisture_max: number;
+  pump_on: number;
+}
+
+export interface NotificationRecord {
+  id: number;
+  ts: string;
+  level: string;
+  kind: string;
+  title: string;
+  message: string;
+  is_read: number;
+  simulated: number;
+}
+
+export interface EventRecord {
+  id: number;
+  ts: string;
+  type: string;
+  text: string;
+  simulated: number;
+}
+
+interface DbStore {
+  esp32_raw: Esp32Record[];
+  readings: ReadingRecord[];
+  notifications: NotificationRecord[];
+  events: EventRecord[];
+  state: Record<string, unknown>;
+  nextId: {
+    esp32: number;
+    readings: number;
+    notifications: number;
+    events: number;
+  };
+}
 
 const DB_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "database");
-const DB_PATH = path.join(DB_DIR, "ndox_naatal.db");
+const DB_FILE = path.join(DB_DIR, "ndox_naatal_store.json");
 
-let _db: Database.Database | null = null;
+let memoryStore: DbStore | null = null;
 
-function getDb(): Database.Database {
-  if (_db) return _db;
-  if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-  _db = new Database(DB_PATH);
-  _db.exec(`
-    CREATE TABLE IF NOT EXISTS esp32_raw(
-      id INTEGER PRIMARY KEY AUTOINCREMENT, parcel TEXT NOT NULL,
-      soil_moisture REAL NOT NULL, air_temperature REAL NOT NULL,
-      air_humidity REAL NOT NULL, received_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS readings(
-      id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, parcel TEXT NOT NULL,
-      crop TEXT NOT NULL, phase TEXT NOT NULL, mode TEXT NOT NULL,
-      soil_moisture REAL, air_temperature REAL, air_humidity REAL,
-      ph REAL, salinity REAL, nitrogen REAL, phosphorus REAL, potassium REAL,
-      moisture_min REAL, moisture_max REAL, pump_on INTEGER NOT NULL DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS notifications(
-      id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, level TEXT NOT NULL,
-      kind TEXT NOT NULL, title TEXT NOT NULL, message TEXT NOT NULL,
-      is_read INTEGER NOT NULL DEFAULT 0, simulated INTEGER NOT NULL DEFAULT 1);
-    CREATE TABLE IF NOT EXISTS events(
-      id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, type TEXT NOT NULL,
-      text TEXT NOT NULL, simulated INTEGER NOT NULL DEFAULT 1);
-    CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  `);
-  return _db;
+function getStore(): DbStore {
+  if (memoryStore) return memoryStore;
+
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const data = fs.readFileSync(DB_FILE, "utf-8");
+      memoryStore = JSON.parse(data);
+      return memoryStore!;
+    }
+  } catch (err) {
+    console.error("Error reading DB_FILE:", err);
+  }
+
+  memoryStore = {
+    esp32_raw: [],
+    readings: [],
+    notifications: [],
+    events: [],
+    state: {},
+    nextId: { esp32: 1, readings: 1, notifications: 1, events: 1 },
+  };
+  return memoryStore;
+}
+
+function saveStore() {
+  if (!memoryStore) return;
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(memoryStore, null, 2), "utf-8");
+  } catch {
+    // Non-fatal if /tmp write fails
+  }
 }
 
 // --- État simulation ---
-export function getState(): Record<string, unknown> | null {
-  const row = getDb().prepare("SELECT value FROM state WHERE key='sim'").get() as { value: string } | undefined;
-  return row ? JSON.parse(row.value) : null;
+export async function getState(): Promise<Record<string, unknown> | null> {
+  const store = getStore();
+  const val = store.state["sim"];
+  return (val as Record<string, unknown>) ?? null;
 }
-export function setState(s: unknown): void {
-  getDb().prepare("INSERT INTO state(key,value) VALUES('sim',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(s));
+
+export async function setState(s: unknown): Promise<void> {
+  const store = getStore();
+  store.state["sim"] = s;
+  saveStore();
 }
 
 // --- ESP32 ---
-export function saveEsp32(d: Record<string, unknown>): void {
-  getDb().prepare("INSERT INTO esp32_raw(parcel,soil_moisture,air_temperature,air_humidity,received_at) VALUES(?,?,?,?,?)")
-    .run(d.parcel, d.soil_moisture, d.air_temperature, d.air_humidity, d.received_at);
+export async function saveEsp32(d: Record<string, unknown>): Promise<void> {
+  const store = getStore();
+  const rec: Esp32Record = {
+    id: store.nextId.esp32++,
+    parcel: String(d.parcel || ""),
+    soil_moisture: Number(d.soil_moisture),
+    air_temperature: Number(d.air_temperature),
+    air_humidity: Number(d.air_humidity),
+    received_at: String(d.received_at),
+  };
+  store.esp32_raw.push(rec);
+  saveStore();
 }
-export function latestEsp32(): Record<string, unknown> | null {
-  const r = getDb().prepare("SELECT * FROM esp32_raw ORDER BY id DESC LIMIT 1").get();
-  return r ? (r as Record<string, unknown>) : null;
+
+export async function latestEsp32(): Promise<Record<string, unknown> | null> {
+  const store = getStore();
+  const list = store.esp32_raw;
+  return list.length ? (list[list.length - 1] as unknown as Record<string, unknown>) : null;
 }
 
 // --- Historique ---
-const READING_COLS = ["ts","parcel","crop","phase","mode","soil_moisture","air_temperature","air_humidity","ph","salinity","nitrogen","phosphorus","potassium","moisture_min","moisture_max","pump_on"];
-export function saveReading(d: Record<string, unknown>): void {
-  getDb().prepare(`INSERT INTO readings(${READING_COLS.join(",")}) VALUES(${READING_COLS.map(()=>"?").join(",")})`)
-    .run(...READING_COLS.map(k => d[k]));
+export async function saveReading(d: Record<string, unknown>): Promise<void> {
+  const store = getStore();
+  const rec: ReadingRecord = {
+    id: store.nextId.readings++,
+    ts: String(d.ts),
+    parcel: String(d.parcel),
+    crop: String(d.crop),
+    phase: String(d.phase),
+    mode: String(d.mode),
+    soil_moisture: Number(d.soil_moisture),
+    air_temperature: Number(d.air_temperature),
+    air_humidity: Number(d.air_humidity),
+    ph: Number(d.ph),
+    salinity: Number(d.salinity),
+    nitrogen: Number(d.nitrogen),
+    phosphorus: Number(d.phosphorus),
+    potassium: Number(d.potassium),
+    moisture_min: Number(d.moisture_min),
+    moisture_max: Number(d.moisture_max),
+    pump_on: Number(d.pump_on),
+  };
+  store.readings.push(rec);
+  saveStore();
 }
-export function history(limit: number): Record<string, unknown>[] {
-  return getDb().prepare("SELECT * FROM readings ORDER BY id DESC LIMIT ?").all(limit) as Record<string, unknown>[];
+
+export async function history(limit: number): Promise<Record<string, unknown>[]> {
+  const store = getStore();
+  const res = [...store.readings].reverse().slice(0, limit);
+  return res as unknown as Record<string, unknown>[];
 }
 
 // --- Notifications ---
-export function addNotification(ts: string, level: string, kind: string, title: string, message: string): void {
-  getDb().prepare("INSERT INTO notifications(ts,level,kind,title,message) VALUES(?,?,?,?,?)").run(ts,level,kind,title,message);
+export async function addNotification(
+  ts: string,
+  level: string,
+  kind: string,
+  title: string,
+  message: string
+): Promise<void> {
+  const store = getStore();
+  const rec: NotificationRecord = {
+    id: store.nextId.notifications++,
+    ts,
+    level,
+    kind,
+    title,
+    message,
+    is_read: 0,
+    simulated: 1,
+  };
+  store.notifications.push(rec);
+  saveStore();
 }
-export function listNotifications(limit = 40): Record<string, unknown>[] {
-  return getDb().prepare("SELECT * FROM notifications ORDER BY id DESC LIMIT ?").all(limit) as Record<string, unknown>[];
+
+export async function listNotifications(limit = 40): Promise<Record<string, unknown>[]> {
+  const store = getStore();
+  const res = [...store.notifications].reverse().slice(0, limit);
+  return res as unknown as Record<string, unknown>[];
 }
-export function unreadCount(): number {
-  return (getDb().prepare("SELECT COUNT(*) as c FROM notifications WHERE is_read=0").get() as {c:number}).c;
+
+export async function unreadCount(): Promise<number> {
+  const store = getStore();
+  return store.notifications.filter((n) => n.is_read === 0).length;
 }
-export function markRead(nid?: number): void {
-  if (nid == null) getDb().prepare("UPDATE notifications SET is_read=1").run();
-  else getDb().prepare("UPDATE notifications SET is_read=1 WHERE id=?").run(nid);
+
+export async function markRead(nid?: number): Promise<void> {
+  const store = getStore();
+  if (nid == null) {
+    store.notifications.forEach((n) => (n.is_read = 1));
+  } else {
+    const item = store.notifications.find((n) => n.id === nid);
+    if (item) item.is_read = 1;
+  }
+  saveStore();
 }
 
 // --- Événements ---
-export function addEvent(ts: string, type_: string, text: string): void {
-  getDb().prepare("INSERT INTO events(ts,type,text) VALUES(?,?,?)").run(ts, type_, text);
+export async function addEvent(ts: string, type_: string, text: string): Promise<void> {
+  const store = getStore();
+  const rec: EventRecord = {
+    id: store.nextId.events++,
+    ts,
+    type: type_,
+    text,
+    simulated: 1,
+  };
+  store.events.push(rec);
+  saveStore();
 }
-export function listEvents(limit = 30): Record<string, unknown>[] {
-  return getDb().prepare("SELECT * FROM events ORDER BY id DESC LIMIT ?").all(limit) as Record<string, unknown>[];
+
+export async function listEvents(limit = 30): Promise<Record<string, unknown>[]> {
+  const store = getStore();
+  const res = [...store.events].reverse().slice(0, limit);
+  return res as unknown as Record<string, unknown>[];
 }

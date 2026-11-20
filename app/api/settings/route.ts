@@ -3,6 +3,6 @@ import { setSettings } from "@/lib/service";
 export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const [out, code] = setSettings(body);
+  const [out, code] = await setSettings(body);
   return NextResponse.json(out, { status: code });
 }

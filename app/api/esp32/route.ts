@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
   if (v.soil_moisture < 0 || v.soil_moisture > 100 || v.air_humidity < 0 || v.air_humidity > 100 || v.air_temperature < -10 || v.air_temperature > 70)
     return NextResponse.json({ error: "Valeurs hors limites" }, { status: 400 });
   const rec = { ...v, parcel: String(body.parcel ?? "Parcelle de Miss").slice(0, 80), received_at: new Date().toISOString() };
-  saveEsp32(rec);
-  const st = getState() as Record<string, unknown> | null ?? {};
+  await saveEsp32(rec);
+  const st = await getState() ?? {};
   return NextResponse.json({ ok: true, message: "Mesures ESP32 enregistrées", received_at: rec.received_at,
     pump_command: st.pump_on ? "on" : "off", pump_simulated: true }, { status: 201 });
 }
