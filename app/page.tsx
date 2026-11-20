@@ -185,7 +185,7 @@ export default function DashboardPage() {
         <footer>© 2026 NDox et Naatal · Prototype IoT agricole <span>Les valeurs et actions marquées simulées sont fictives.</span></footer>
       </main>
 
-      <Script src="/dashboard.js" strategy="lazyOnload" />
+      <Script src="/dashboard.js" strategy="afterInteractive" />
     </>
   );
 }

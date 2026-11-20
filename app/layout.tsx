@@ -18,7 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <Script src="https://cdn.jsdelivr.net/npm/chart.js" strategy="beforeInteractive" />
+        <Script
+          src="https://cdn.jsdelivr.net/npm/chart.js"
+          strategy="afterInteractive"
+        />
         {children}
       </body>
     </html>
