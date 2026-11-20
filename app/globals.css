@@ -44,6 +44,16 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+section[id],
+div[id],
+main[id] {
+  scroll-margin-top: 28px;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -156,6 +166,16 @@ header .eyebrow {
   background: var(--green-light);
   color: var(--green);
   font-weight: 700;
+  border-left: 3.5px solid var(--green);
+  box-shadow: 0 2px 8px rgba(27, 122, 87, 0.08);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.chip:active {
+  transform: scale(0.96);
 }
 
 .sidebar-foot {
