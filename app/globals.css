@@ -74,6 +74,22 @@ body {
   margin: 0 0 38px;
 }
 
+.brand-logo-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 4px 14px rgba(27, 122, 87, 0.16);
+  border: 1px solid rgba(27, 122, 87, 0.15);
+  background: #ffffff;
+  padding: 2px;
+  transition: transform 0.2s ease;
+}
+
+.brand-logo-img:hover {
+  transform: scale(1.05);
+}
+
 .logo {
   background: linear-gradient(135deg, #22996d 0%, #156947 100%);
   color: #fff;

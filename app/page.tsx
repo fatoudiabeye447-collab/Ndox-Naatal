@@ -5,7 +5,7 @@ export default function DashboardPage() {
     <>
       <aside className="sidebar">
         <div className="brand">
-          <span className="logo">N</span>
+          <img src="/logo.jpg" alt="NDox et Naatal" className="brand-logo-img" />
           <div><b>NDox et Naatal</b><small>AGRICULTURE INTELLIGENTE</small></div>
         </div>
         <p className="nav-label">ESPACE DE TRAVAIL</p>
