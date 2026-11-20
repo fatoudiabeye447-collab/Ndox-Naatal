@@ -1,6 +1,22 @@
-.venv/
+# Python
 __pycache__/
 *.py[cod]
+.venv/
+*.egg-info/
+
+# Next.js
+.next/
+out/
+node_modules/
+
+# Database
+database/ndox_naatal.db
+
+# Env
 .env
-.env.*
-database/*.db
+.env.local
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
