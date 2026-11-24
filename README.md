@@ -1,4 +1,4 @@
-# NDox et Naatal — Next.js
+# Ndox & Naatal — Next.js
 
 Tableau de bord IoT agricole. Remplace Flask par Next.js (App Router + API Routes) pour déploiement Vercel.
 

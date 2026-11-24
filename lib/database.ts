@@ -29,6 +29,7 @@ export interface ReadingRecord {
   moisture_min: number;
   moisture_max: number;
   pump_on: number;
+  fert_pump_on?: number;
 }
 
 export interface NotificationRecord {
@@ -67,22 +68,45 @@ interface DbStore {
 const DB_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "database");
 const DB_FILE = path.join(DB_DIR, "ndox_naatal_store.json");
 
-let memoryStore: DbStore | null = null;
+const g = globalThis as unknown as {
+  __ndoxStore?: DbStore;
+  __ndoxMtime?: number;
+  __ndoxLock?: Promise<unknown>;
+};
+
+export async function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = g.__ndoxLock ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((res) => {
+    release = res;
+  });
+  g.__ndoxLock = prev.then(() => next, () => next);
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
 
 function getStore(): DbStore {
-  if (memoryStore) return memoryStore;
-
   try {
     if (fs.existsSync(DB_FILE)) {
-      const data = fs.readFileSync(DB_FILE, "utf-8");
-      memoryStore = JSON.parse(data);
-      return memoryStore!;
+      const mtime = fs.statSync(DB_FILE).mtimeMs;
+      if (!g.__ndoxStore || g.__ndoxMtime !== mtime) {
+        const data = fs.readFileSync(DB_FILE, "utf-8");
+        g.__ndoxStore = JSON.parse(data);
+        g.__ndoxMtime = mtime;
+      }
+      return g.__ndoxStore!;
     }
   } catch (err) {
     console.error("Error reading DB_FILE:", err);
   }
 
-  memoryStore = {
+  if (g.__ndoxStore) return g.__ndoxStore;
+
+  g.__ndoxStore = {
     esp32_raw: [],
     readings: [],
     notifications: [],
@@ -90,16 +114,17 @@ function getStore(): DbStore {
     state: {},
     nextId: { esp32: 1, readings: 1, notifications: 1, events: 1 },
   };
-  return memoryStore;
+  return g.__ndoxStore;
 }
 
 function saveStore() {
-  if (!memoryStore) return;
+  if (!g.__ndoxStore) return;
   try {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
-    fs.writeFileSync(DB_FILE, JSON.stringify(memoryStore, null, 2), "utf-8");
+    fs.writeFileSync(DB_FILE, JSON.stringify(g.__ndoxStore, null, 2), "utf-8");
+    g.__ndoxMtime = fs.statSync(DB_FILE).mtimeMs;
   } catch {
     // Non-fatal if /tmp write fails
   }
@@ -160,6 +185,7 @@ export async function saveReading(d: Record<string, unknown>): Promise<void> {
     moisture_min: Number(d.moisture_min),
     moisture_max: Number(d.moisture_max),
     pump_on: Number(d.pump_on),
+    fert_pump_on: Number(d.fert_pump_on ?? 0),
   };
   store.readings.push(rec);
   saveStore();

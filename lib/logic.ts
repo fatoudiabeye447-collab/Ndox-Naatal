@@ -66,6 +66,7 @@ export function evaluate(st: SimState, real: Esp32Data | null) {
     sources: { soil_moisture: sReal, air_temperature: sReal, air_humidity: sReal, rain: "simulé" },
     nutrients: nutrientList,
     pump: { on: st.pump_on, since: st.pump_since, simulated: true },
+    fert_pump: { on: Boolean(st.fert_pump_on), since: st.fert_pump_since ?? null, simulated: true },
     recommendations: {
       irrigation: { title: irr[0], detail: irr[1] },
       fertilisation: { title: fertTitle, detail: fertDetail, tips: c.tips },

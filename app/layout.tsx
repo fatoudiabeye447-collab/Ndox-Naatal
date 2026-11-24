@@ -3,7 +3,7 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NDox et Naatal - Agriculture intelligente",
+  title: "Ndox & Naatal - Agriculture intelligente",
   description: "Tableau de bord IoT agricole intelligent",
   icons: {
     icon: "/logo.jpg",

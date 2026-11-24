@@ -5,8 +5,8 @@ export default function DashboardPage() {
     <>
       <aside className="sidebar">
         <div className="brand">
-          <img src="/logo.jpg" alt="NDox et Naatal" className="brand-logo-img" />
-          <div><b>NDox et Naatal</b><small>AGRICULTURE INTELLIGENTE</small></div>
+          <img src="/logo.jpg" alt="Ndox & Naatal" className="brand-logo-img" />
+          <div><b>Ndox &amp; Naatal</b><small>AGRICULTURE INTELLIGENTE</small></div>
         </div>
         <p className="nav-label">ESPACE DE TRAVAIL</p>
         <nav>
@@ -27,7 +27,7 @@ export default function DashboardPage() {
         <header>
           <div>
             <div className="eyebrow">TABLEAU DE BORD / VUE GÉNÉRALE</div>
-            <h1>NDox et Naatal <span>✦</span></h1>
+            <h1>Ndox &amp; Naatal <span>✦</span></h1>
             <p>État de votre exploitation en temps réel.</p>
           </div>
           <div className="top-right">
@@ -131,13 +131,30 @@ export default function DashboardPage() {
         </section>
 
         <div className="section-title" id="fert">
-          <div><h2>Gestion des engrais</h2><p>Surveillance des paramètres nutritifs selon la culture. Valeurs simulées, conseils indicatifs.</p></div>
+          <div><h2>Gestion des engrais</h2><p>Surveillance des paramètres nutritifs selon la culture et pilotage de la pompe d&apos;engrais.</p></div>
         </div>
         <section className="two-col">
           <article className="panel">
             <div className="panel-head"><div><h3>Paramètres nutritifs</h3><p>Valeur mesurée par rapport à la plage cible de la culture</p></div><em className="sim">SIMULÉ</em></div>
             <div className="nut-list" id="nutList"></div>
           </article>
+          <article className="panel pump">
+            <div className="panel-head">
+              <div><h3>Pompe d&apos;engrais</h3><p>Pompe simulée — apport nutritif N-P-K</p></div>
+              <em className="sim">SIMULÉE</em>
+            </div>
+            <div className="pump-state">
+              <span className="pump-dot fert" id="fertPumpDot"></span>
+              <div><strong id="fertPumpText">Arrêtée</strong><small id="fertPumpSince">—</small></div>
+            </div>
+            <div className="pump-btns">
+              <button id="fertPumpStart" className="btn primary">▶ Démarrer la pompe</button>
+              <button id="fertPumpStop" className="btn">■ Arrêter la pompe</button>
+            </div>
+            <p className="hint" id="fertPumpMsg">Arrêt automatique (simulé) dès que les seuils cibles N-P-K sont atteints.</p>
+          </article>
+        </section>
+        <section style={{ marginBottom: "24px" }}>
           <article className="advice">
             <span>🌱</span>
             <div><small>CONSEILS ENGRAIS</small><h3 id="fertTitle">—</h3><p id="fertDetail">Chargement…</p><ul id="fertTips"></ul></div>
@@ -172,7 +189,7 @@ export default function DashboardPage() {
             <div className="panel-head"><div><h3>Mesures</h3><p>Une ligne toutes les ~10 s</p></div></div>
             <div className="tbl-wrap">
               <table id="histTable">
-                <thead><tr><th>Heure</th><th>Mode</th><th>Culture</th><th>Sol %</th><th>T °C</th><th>Air %</th><th>Pompe</th></tr></thead>
+                <thead><tr><th>Heure</th><th>Mode</th><th>Culture</th><th>Sol %</th><th>T °C</th><th>Air %</th><th>Eau</th><th>Engrais</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -182,7 +199,7 @@ export default function DashboardPage() {
             <div id="events" className="events"></div>
           </article>
         </section>
-        <footer>© 2026 NDox et Naatal · Prototype IoT agricole <span>Les valeurs et actions marquées simulées sont fictives.</span></footer>
+        <footer>© 2026 Ndox &amp; Naatal · Prototype IoT agricole <span>Les valeurs et actions marquées simulées sont fictives.</span></footer>
       </main>
 
       <Script src="/dashboard.js" strategy="afterInteractive" />

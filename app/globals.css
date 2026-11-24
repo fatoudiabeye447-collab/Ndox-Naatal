@@ -1,5 +1,5 @@
 /* ==========================================================================
-   NDox et Naatal — Thème Moderne Agriculture Intelligente
+   Ndox & Naatal — Thème Moderne Agriculture Intelligente
    Polices : Outfit (Titres) & Plus Jakarta Sans (Corps / Données)
    Palette : Verts organiques profonds, nuances de sauge et terre nourricière
    ========================================================================== */
@@ -651,6 +651,11 @@ header p,
   background: var(--blue);
   box-shadow: 0 0 0 6px var(--blue-light);
   animation: pulse 1.4s infinite;
+}
+
+.pump-dot.fert.on {
+  background: var(--green);
+  box-shadow: 0 0 0 6px var(--green-light);
 }
 
 @keyframes pulse {

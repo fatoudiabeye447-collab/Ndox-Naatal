@@ -1,4 +1,4 @@
-let chart, CAT, CUR = {}, HIST = [];
+let chart, CAT, CUR = {}, HIST = [], refreshSeq = 0, settingsSeq = 0;
 const $ = id => document.getElementById(id);
 const text = (id, v) => { $(id).textContent = v };
 const fmt = n => Number(n).toFixed(1);
@@ -15,8 +15,13 @@ function renderPickers(d) {
 }
 document.addEventListener("click", async e => {
   const b = e.target.closest(".chip"); if (!b) return;
-  const crop = b.dataset.crop || CUR.crop, phase = b.dataset.phase || CUR.phase;
-  await post("/api/settings", { crop, phase }); CUR.pick = null; refresh();
+  const crop = b.dataset.crop || CUR.crop || "tomate";
+  const phase = b.dataset.phase || CUR.phase || "croissance";
+  CUR.crop = crop; CUR.phase = phase; CUR.pick = null;
+  renderPickers({ crop: { id: crop }, phase: { id: phase } });
+  const mySeq = ++settingsSeq;
+  await post("/api/settings", { crop, phase });
+  if (mySeq === settingsSeq) refresh();
 });
 
 function renderNutrients(list) {
@@ -33,6 +38,15 @@ function renderPump(d) {
   text("pumpText", on ? "En marche (simulée)" : "Arrêtée");
   text("pumpSince", on && d.pump.since ? "Démarrée à " + hhmm(d.pump.since) : "Prête");
   $("pumpStart").disabled = on; $("pumpStop").disabled = !on;
+}
+
+function renderFertPump(d) {
+  const fp = d.fert_pump || { on: false, since: null };
+  const on = fp.on;
+  $("fertPumpDot").className = "pump-dot fert" + (on ? " on" : "");
+  text("fertPumpText", on ? "En marche (simulée)" : "Arrêtée");
+  text("fertPumpSince", on && fp.since ? "Démarrée à " + hhmm(fp.since) : "Prête");
+  $("fertPumpStart").disabled = on; $("fertPumpStop").disabled = !on;
 }
 
 function draw() {
@@ -52,7 +66,7 @@ function draw() {
 
 function renderHistory(h) {
   HIST = h.readings;
-  $("histTable").querySelector("tbody").innerHTML = HIST.slice(0, 40).map(r => `<tr><td>${hhmm(r.ts)}</td><td>${r.mode}</td><td>${r.crop}</td><td>${fmt(r.soil_moisture)}</td><td>${fmt(r.air_temperature)}</td><td>${fmt(r.air_humidity)}</td><td>${r.pump_on ? "ON" : "—"}</td></tr>`).join("") || `<tr><td colspan="7">Aucune mesure</td></tr>`;
+  $("histTable").querySelector("tbody").innerHTML = HIST.slice(0, 40).map(r => `<tr><td>${hhmm(r.ts)}</td><td>${r.mode}</td><td>${r.crop}</td><td>${fmt(r.soil_moisture)}</td><td>${fmt(r.air_temperature)}</td><td>${fmt(r.air_humidity)}</td><td>${r.pump_on ? "ON" : "—"}</td><td>${r.fert_pump_on ? "ON" : "—"}</td></tr>`).join("") || `<tr><td colspan="8">Aucune mesure</td></tr>`;
   $("events").innerHTML = h.events.map(e => `<p><small>${hhmm(e.ts)}</small>${e.text}</p>`).join("") || `<p>Aucune action enregistrée.</p>`;
   draw();
 }
@@ -66,10 +80,13 @@ $("notifList").addEventListener("click", async e => { const n = e.target.closest
 $("readAll").addEventListener("click", async () => { await post("/api/notifications/read", {}); refresh() });
 
 async function refresh() {
+  const seq = ++refreshSeq, sSeq = settingsSeq;
   try {
     const [r, h, n] = await Promise.all([fetch("/api/dashboard", { cache: "no-store" }), fetch("/api/history?limit=60"), fetch("/api/notifications")]);
     if (!r.ok) throw Error("API");
-    const d = await r.json(); CUR.crop = d.crop.id; CUR.phase = d.phase.id;
+    const d = await r.json();
+    if (seq !== refreshSeq || sSeq !== settingsSeq) return;
+    CUR.crop = d.crop.id; CUR.phase = d.phase.id;
     const v = d.values, nut = Object.fromEntries(d.nutrients.map(x => [x.key, x]));
     text("parcel", d.parcel); renderPickers(d);
     text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
@@ -89,13 +106,15 @@ async function refresh() {
     text("irrigationTitle", d.recommendations.irrigation.title); text("irrigationDetail", d.recommendations.irrigation.detail);
     text("fertTitle", d.recommendations.fertilisation.title); text("fertDetail", d.recommendations.fertilisation.detail);
     $("fertTips").innerHTML = d.recommendations.fertilisation.tips.map(t => `<li>${t}</li>`).join("");
-    renderNutrients(d.nutrients); renderPump(d);
+    renderNutrients(d.nutrients); renderPump(d); renderFertPump(d);
     renderHistory(await h.json()); renderNotifs(await n.json());
-  } catch (e) { text("mode", "Serveur indisponible"); text("modeText", "Lancez Flask pour démarrer NDox et Naatal."); console.error(e) }
+  } catch (e) { text("mode", "Serveur indisponible"); text("modeText", "Lancez le serveur pour démarrer Ndox & Naatal."); console.error(e) }
 }
 
 $("pumpStart").addEventListener("click", async () => { const r = await post("/api/pump", { action: "start" }); text("pumpMsg", r.message); refresh() });
 $("pumpStop").addEventListener("click", async () => { const r = await post("/api/pump", { action: "stop" }); text("pumpMsg", r.message); refresh() });
+$("fertPumpStart").addEventListener("click", async () => { const r = await post("/api/fert-pump", { action: "start" }); text("fertPumpMsg", r.message); refresh() });
+$("fertPumpStop").addEventListener("click", async () => { const r = await post("/api/fert-pump", { action: "stop" }); text("fertPumpMsg", r.message); refresh() });
 $("resetSim").addEventListener("click", async () => { await post("/api/simulation/reset"); refresh() });
 $("refresh").addEventListener("click", refresh);
 $("metric").addEventListener("change", draw);

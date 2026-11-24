@@ -4,6 +4,9 @@ const SPEED = parseFloat(process.env.NDOX_SIM_SPEED ?? "1");
 const DRY_PER_MIN = 2.0;
 const PUMP_PER_MIN = 12.0;
 const N_USE_PER_MIN = 0.25;
+const FERT_N_PER_MIN = 6.0;
+const FERT_P_PER_MIN = 4.0;
+const FERT_K_PER_MIN = 6.0;
 const MAX_STEP = 60;
 
 const BASE = {
@@ -20,7 +23,11 @@ export interface SimState {
   air: number;
   pump_on: boolean;
   pump_since: string | null;
+  fert_pump_on?: boolean;
+  fert_pump_since?: string | null;
   n_used: number;
+  p_added?: number;
+  k_added?: number;
   last_ts: number;
   last_record: number;
   last_notif: Record<string, number>;
@@ -40,7 +47,9 @@ export function newState(now: number, crop = "tomate", phase = "croissance"): Si
     parcel: "Parcelle de Miss", crop, phase,
     soil: 65.0, temp: 28.0, air: 65.0,
     pump_on: false, pump_since: null,
-    n_used: 0.0, last_ts: now, last_record: 0, last_notif: {},
+    fert_pump_on: false, fert_pump_since: null,
+    n_used: 0.0, p_added: 0.0, k_added: 0.0,
+    last_ts: now, last_record: 0, last_notif: {},
   };
 }
 
@@ -69,7 +78,13 @@ export function advance(st: SimState, now: number, real: Esp32Data | null = null
     const gain = st.pump_on ? PUMP_PER_MIN / 60 : 0;
     st.soil = Math.round(Math.max(0, Math.min(100, st.soil + (gain - drying) * dt)) * 100) / 100;
   }
-  st.n_used = Math.min(st.n_used + (N_USE_PER_MIN / 60) * dt, 35.0);
+  if (st.fert_pump_on) {
+    st.n_used = Math.max(-35.0, st.n_used - (FERT_N_PER_MIN / 60) * dt);
+    st.p_added = Math.min(35.0, (st.p_added ?? 0) + (FERT_P_PER_MIN / 60) * dt);
+    st.k_added = Math.min(45.0, (st.k_added ?? 0) + (FERT_K_PER_MIN / 60) * dt);
+  } else {
+    st.n_used = Math.min(st.n_used + (N_USE_PER_MIN / 60) * dt, 35.0);
+  }
 }
 
 export function nutrients(st: SimState) {
@@ -77,8 +92,8 @@ export function nutrients(st: SimState) {
     ph: BASE.ph,
     salinity: BASE.salinity,
     nitrogen: Math.round((BASE.nitrogen - st.n_used) * 10) / 10,
-    phosphorus: BASE.phosphorus,
-    potassium: BASE.potassium,
+    phosphorus: Math.round((BASE.phosphorus + (st.p_added ?? 0)) * 10) / 10,
+    potassium: Math.round((BASE.potassium + (st.k_added ?? 0)) * 10) / 10,
     rain: BASE.rain,
   };
 }
