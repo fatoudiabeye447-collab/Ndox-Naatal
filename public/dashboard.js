@@ -55,11 +55,14 @@ document.addEventListener("click", async e => {
 
   pendingSettings = true;
   try {
-    await post("/api/settings", { crop: CUR.crop, phase: CUR.phase });
+    const res = await post("/api/settings", { crop: CUR.crop, phase: CUR.phase });
+    console.log("Settings updated:", res);
+  } catch (err) {
+    console.error("Settings update error:", err);
   } finally {
     pendingSettings = false;
   }
-  refresh();
+  await refresh();
 });
 
 function renderNutrients(list) {

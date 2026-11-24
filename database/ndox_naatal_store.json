@@ -1,0 +1,30 @@
+{
+  "esp32_raw": [],
+  "readings": [],
+  "notifications": [],
+  "events": [],
+  "state": {
+    "sim": {
+      "parcel": "Parcelle de Miss",
+      "crop": "tomate",
+      "phase": "croissance",
+      "soil": 65,
+      "temp": 28,
+      "air": 65,
+      "pump_on": false,
+      "pump_since": null,
+      "fert_pump_on": false,
+      "fert_pump_since": null,
+      "n_used": 0,
+      "last_ts": 1795559527.182,
+      "last_record": 0,
+      "last_notif": {}
+    }
+  },
+  "nextId": {
+    "esp32": 1,
+    "readings": 1,
+    "notifications": 1,
+    "events": 1
+  }
+}
