@@ -1,4 +1,4 @@
-let chart, CAT, CUR = {}, HIST = [], refreshSeq = 0, settingsSeq = 0;
+let chart, CAT, CUR = { crop: null, phase: null }, HIST = [], refreshSeq = 0, pendingSettings = false;
 const $ = id => document.getElementById(id);
 const text = (id, v) => { $(id).textContent = v };
 const fmt = n => Number(n).toFixed(1);
@@ -6,22 +6,34 @@ const hhmm = s => new Date(s).toLocaleTimeString("fr-FR", { hour: "2-digit", min
 const badgeSrc = (id, v) => { $(id).textContent = v === "réel" ? "RÉEL" : "SIMULÉ"; $(id).className = v === "réel" ? "" : "sim" };
 const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json().then(j => ({ ok: r.ok, ...j })));
 
-function renderPickers(d) {
-  if (!CAT) return;
-  const key = d.crop.id + "|" + d.phase.id;
-  if (CUR.pick === key) return; CUR.pick = key;
-  $("cropPick").innerHTML = CAT.crops.map(c => `<button class="chip ${c.id === d.crop.id ? "on" : ""}" data-crop="${c.id}">${c.icon} ${c.label}</button>`).join("");
-  $("phasePick").innerHTML = CAT.phases.map(p => `<button class="chip ${p.id === d.phase.id ? "on" : ""}" data-phase="${p.id}">${p.label}</button>`).join("");
+// --- Pickers culture / phase ---
+// Pas de cache : on re-rend toujours pour être sûr de l'état affiché
+function renderPickers(cropId, phaseId) {
+  if (!CAT || !cropId || !phaseId) return;
+  $("cropPick").innerHTML = CAT.crops.map(c =>
+    `<button class="chip ${c.id === cropId ? "on" : ""}" data-crop="${c.id}">${c.icon} ${c.label}</button>`
+  ).join("");
+  $("phasePick").innerHTML = CAT.phases.map(p =>
+    `<button class="chip ${p.id === phaseId ? "on" : ""}" data-phase="${p.id}">${p.label}</button>`
+  ).join("");
 }
+
 document.addEventListener("click", async e => {
-  const b = e.target.closest(".chip"); if (!b) return;
-  const crop = b.dataset.crop || CUR.crop || "tomate";
-  const phase = b.dataset.phase || CUR.phase || "croissance";
-  CUR.crop = crop; CUR.phase = phase; CUR.pick = null;
-  renderPickers({ crop: { id: crop }, phase: { id: phase } });
-  const mySeq = ++settingsSeq;
-  await post("/api/settings", { crop, phase });
-  if (mySeq === settingsSeq) refresh();
+  const b = e.target.closest(".chip");
+  if (!b) return;
+  // Détection explicite : le chip a-t-il l'attribut data-crop ou data-phase ?
+  const isCrop  = b.hasAttribute("data-crop");
+  const isPhase = b.hasAttribute("data-phase");
+  if (!isCrop && !isPhase) return;
+  if (isCrop)  CUR.crop  = b.dataset.crop;
+  if (isPhase) CUR.phase = b.dataset.phase;
+  if (!CUR.crop || !CUR.phase) return;
+  // Mise à jour visuelle immédiate (réponse instantanée au clic)
+  renderPickers(CUR.crop, CUR.phase);
+  pendingSettings = true;
+  await post("/api/settings", { crop: CUR.crop, phase: CUR.phase });
+  pendingSettings = false;
+  refresh();
 });
 
 function renderNutrients(list) {
@@ -80,15 +92,19 @@ $("notifList").addEventListener("click", async e => { const n = e.target.closest
 $("readAll").addEventListener("click", async () => { await post("/api/notifications/read", {}); refresh() });
 
 async function refresh() {
-  const seq = ++refreshSeq, sSeq = settingsSeq;
+  const seq = ++refreshSeq;
   try {
     const [r, h, n] = await Promise.all([fetch("/api/dashboard", { cache: "no-store" }), fetch("/api/history?limit=60"), fetch("/api/notifications")]);
     if (!r.ok) throw Error("API");
     const d = await r.json();
-    if (seq !== refreshSeq || sSeq !== settingsSeq) return;
-    CUR.crop = d.crop.id; CUR.phase = d.phase.id;
+    if (seq !== refreshSeq) return;
+    // On ne met à jour crop/phase depuis le serveur que si aucun clic utilisateur n'est en attente
+    if (!pendingSettings) {
+      CUR.crop = d.crop.id; CUR.phase = d.phase.id;
+      renderPickers(CUR.crop, CUR.phase);
+    }
     const v = d.values, nut = Object.fromEntries(d.nutrients.map(x => [x.key, x]));
-    text("parcel", d.parcel); renderPickers(d);
+    text("parcel", d.parcel);
     text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
     text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
     $("soilStatus").textContent = d.moisture.status.toUpperCase(); $("soilStatus").className = "st " + d.moisture.status;
