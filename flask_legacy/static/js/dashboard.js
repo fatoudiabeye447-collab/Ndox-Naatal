@@ -1,4 +1,4 @@
-let chart, CAT, CUR = {}, HIST = [];
+let chart, CAT, CUR = { crop: null, phase: null }, HIST = [], refreshSeq = 0, pendingSettings = false;
 const $ = id => document.getElementById(id);
 const text = (id, v) => { $(id).textContent = v };
 const fmt = n => Number(n).toFixed(1);
@@ -6,17 +6,60 @@ const hhmm = s => new Date(s).toLocaleTimeString("fr-FR", { hour: "2-digit", min
 const badgeSrc = (id, v) => { $(id).textContent = v === "réel" ? "RÉEL" : "SIMULÉ"; $(id).className = v === "réel" ? "" : "sim" };
 const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json().then(j => ({ ok: r.ok, ...j })));
 
-function renderPickers(d) {
-  if (!CAT) return;
-  const key = d.crop.id + "|" + d.phase.id;
-  if (CUR.pick === key) return; CUR.pick = key;
-  $("cropPick").innerHTML = CAT.crops.map(c => `<button class="chip ${c.id === d.crop.id ? "on" : ""}" data-crop="${c.id}">${c.icon} ${c.label}</button>`).join("");
-  $("phasePick").innerHTML = CAT.phases.map(p => `<button class="chip ${p.id === d.phase.id ? "on" : ""}" data-phase="${p.id}">${p.label}</button>`).join("");
+// --- Pickers culture / phase ---
+function renderPickers(cropId, phaseId) {
+  if (!CAT || !cropId || !phaseId) return;
+  $("cropPick").innerHTML = CAT.crops.map(c =>
+    `<button class="chip ${c.id === cropId ? "on" : ""}" data-crop="${c.id}">${c.icon} ${c.label}</button>`
+  ).join("");
+  $("phasePick").innerHTML = CAT.phases.map(p =>
+    `<button class="chip ${p.id === phaseId ? "on" : ""}" data-phase="${p.id}">${p.label}</button>`
+  ).join("");
 }
+
+function updateThresholdsUI(cropId, phaseId) {
+  if (!CAT || !cropId || !phaseId) return;
+  const crop = CAT.crops.find(c => c.id === cropId);
+  const phase = CAT.phases.find(p => p.id === phaseId);
+  if (crop) {
+    text("cropName", crop.icon + " " + crop.label);
+    const m = crop.moisture && crop.moisture[phaseId];
+    if (m) {
+      text("thMin", m.min + " %");
+      text("thMax", m.max + " %");
+      $("mkMin").style.left = m.min + "%";
+      $("mkMax").style.left = m.max + "%";
+    }
+  }
+  if (phase) {
+    text("phaseName", phase.label);
+  }
+}
+
 document.addEventListener("click", async e => {
-  const b = e.target.closest(".chip"); if (!b) return;
-  const crop = b.dataset.crop || CUR.crop, phase = b.dataset.phase || CUR.phase;
-  await post("/api/settings", { crop, phase }); CUR.pick = null; refresh();
+  const b = e.target.closest(".chip");
+  if (!b) return;
+  const isCrop  = b.hasAttribute("data-crop");
+  const isPhase = b.hasAttribute("data-phase");
+  if (!isCrop && !isPhase) return;
+
+  const nextCrop = isCrop ? b.dataset.crop : (CUR.crop || "tomate");
+  const nextPhase = isPhase ? b.dataset.phase : (CUR.phase || "croissance");
+
+  CUR.crop = nextCrop;
+  CUR.phase = nextPhase;
+
+  // Mise à jour visuelle immédiate (boutons + libellés + seuils)
+  renderPickers(CUR.crop, CUR.phase);
+  updateThresholdsUI(CUR.crop, CUR.phase);
+
+  pendingSettings = true;
+  try {
+    await post("/api/settings", { crop: CUR.crop, phase: CUR.phase });
+  } finally {
+    pendingSettings = false;
+  }
+  refresh();
 });
 
 function renderNutrients(list) {
@@ -33,6 +76,15 @@ function renderPump(d) {
   text("pumpText", on ? "En marche (simulée)" : "Arrêtée");
   text("pumpSince", on && d.pump.since ? "Démarrée à " + hhmm(d.pump.since) : "Prête");
   $("pumpStart").disabled = on; $("pumpStop").disabled = !on;
+}
+
+function renderFertPump(d) {
+  const fp = d.fert_pump || { on: false, since: null };
+  const on = fp.on;
+  $("fertPumpDot").className = "pump-dot fert" + (on ? " on" : "");
+  text("fertPumpText", on ? "En marche (simulée)" : "Arrêtée");
+  text("fertPumpSince", on && fp.since ? "Démarrée à " + hhmm(fp.since) : "Prête");
+  $("fertPumpStart").disabled = on; $("fertPumpStop").disabled = !on;
 }
 
 function draw() {
@@ -52,7 +104,7 @@ function draw() {
 
 function renderHistory(h) {
   HIST = h.readings;
-  $("histTable").querySelector("tbody").innerHTML = HIST.slice(0, 40).map(r => `<tr><td>${hhmm(r.ts)}</td><td>${r.mode}</td><td>${r.crop}</td><td>${fmt(r.soil_moisture)}</td><td>${fmt(r.air_temperature)}</td><td>${fmt(r.air_humidity)}</td><td>${r.pump_on ? "ON" : "—"}</td></tr>`).join("") || `<tr><td colspan="7">Aucune mesure</td></tr>`;
+  $("histTable").querySelector("tbody").innerHTML = HIST.slice(0, 40).map(r => `<tr><td>${hhmm(r.ts)}</td><td>${r.mode}</td><td>${r.crop}</td><td>${fmt(r.soil_moisture)}</td><td>${fmt(r.air_temperature)}</td><td>${fmt(r.air_humidity)}</td><td>${r.pump_on ? "ON" : "—"}</td><td>${r.fert_pump_on ? "ON" : "—"}</td></tr>`).join("") || `<tr><td colspan="8">Aucune mesure</td></tr>`;
   $("events").innerHTML = h.events.map(e => `<p><small>${hhmm(e.ts)}</small>${e.text}</p>`).join("") || `<p>Aucune action enregistrée.</p>`;
   draw();
 }
@@ -66,21 +118,28 @@ $("notifList").addEventListener("click", async e => { const n = e.target.closest
 $("readAll").addEventListener("click", async () => { await post("/api/notifications/read", {}); refresh() });
 
 async function refresh() {
+  const seq = ++refreshSeq;
   try {
     const [r, h, n] = await Promise.all([fetch("/api/dashboard", { cache: "no-store" }), fetch("/api/history?limit=60"), fetch("/api/notifications")]);
     if (!r.ok) throw Error("API");
-    const d = await r.json(); CUR.crop = d.crop.id; CUR.phase = d.phase.id;
+    const d = await r.json();
+    if (seq !== refreshSeq) return;
+    // On ne met à jour crop/phase et seuils depuis le serveur que si aucun clic utilisateur n'est en attente
+    if (!pendingSettings) {
+      CUR.crop = d.crop.id; CUR.phase = d.phase.id;
+      renderPickers(CUR.crop, CUR.phase);
+      text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
+      text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
+      $("mkMin").style.left = d.moisture.min + "%"; $("mkMax").style.left = d.moisture.max + "%";
+    }
     const v = d.values, nut = Object.fromEntries(d.nutrients.map(x => [x.key, x]));
-    text("parcel", d.parcel); renderPickers(d);
-    text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
-    text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
+    text("parcel", d.parcel);
     $("soilStatus").textContent = d.moisture.status.toUpperCase(); $("soilStatus").className = "st " + d.moisture.status;
     text("soil", fmt(v.soil_moisture)); text("temp", fmt(v.air_temperature)); text("air", fmt(v.air_humidity));
     text("ph", fmt(nut.ph.value)); text("salinity", fmt(nut.salinity.value)); text("rain", v.rain + " mm");
     text("phRange", `Cible ${nut.ph.min}–${nut.ph.max}`); text("salRange", `Maximum ${nut.salinity.max} dS/m`);
     badgeSrc("src-soil", d.sources.soil_moisture); badgeSrc("src-temp", d.sources.air_temperature); badgeSrc("src-air", d.sources.air_humidity);
     $("soilbar").style.width = Math.max(0, Math.min(100, v.soil_moisture)) + "%";
-    $("mkMin").style.left = d.moisture.min + "%"; $("mkMax").style.left = d.moisture.max + "%";
     const hybrid = d.mode === "hybride";
     text("mode", hybrid ? "Capteurs ESP32 détectés · Mode hybride" : "Mode simulation active");
     text("modeText", hybrid ? "Sol et air réels · reste simulé : pH, salinité, NPK, pluie, pompe" : "Aucune mesure ESP32 récente · toutes les valeurs sont simulées");
@@ -89,13 +148,15 @@ async function refresh() {
     text("irrigationTitle", d.recommendations.irrigation.title); text("irrigationDetail", d.recommendations.irrigation.detail);
     text("fertTitle", d.recommendations.fertilisation.title); text("fertDetail", d.recommendations.fertilisation.detail);
     $("fertTips").innerHTML = d.recommendations.fertilisation.tips.map(t => `<li>${t}</li>`).join("");
-    renderNutrients(d.nutrients); renderPump(d);
+    renderNutrients(d.nutrients); renderPump(d); renderFertPump(d);
     renderHistory(await h.json()); renderNotifs(await n.json());
-  } catch (e) { text("mode", "Serveur indisponible"); text("modeText", "Lancez Flask pour démarrer NDox et Naatal."); console.error(e) }
+  } catch (e) { text("mode", "Serveur indisponible"); text("modeText", "Lancez le serveur pour démarrer Ndox & Naatal."); console.error(e) }
 }
 
 $("pumpStart").addEventListener("click", async () => { const r = await post("/api/pump", { action: "start" }); text("pumpMsg", r.message); refresh() });
 $("pumpStop").addEventListener("click", async () => { const r = await post("/api/pump", { action: "stop" }); text("pumpMsg", r.message); refresh() });
+$("fertPumpStart").addEventListener("click", async () => { const r = await post("/api/fert-pump", { action: "start" }); text("fertPumpMsg", r.message); refresh() });
+$("fertPumpStop").addEventListener("click", async () => { const r = await post("/api/fert-pump", { action: "stop" }); text("fertPumpMsg", r.message); refresh() });
 $("resetSim").addEventListener("click", async () => { await post("/api/simulation/reset"); refresh() });
 $("refresh").addEventListener("click", refresh);
 $("metric").addEventListener("change", draw);

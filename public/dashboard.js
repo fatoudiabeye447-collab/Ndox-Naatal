@@ -7,7 +7,6 @@ const badgeSrc = (id, v) => { $(id).textContent = v === "réel" ? "RÉEL" : "SIM
 const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json().then(j => ({ ok: r.ok, ...j })));
 
 // --- Pickers culture / phase ---
-// Pas de cache : on re-rend toujours pour être sûr de l'état affiché
 function renderPickers(cropId, phaseId) {
   if (!CAT || !cropId || !phaseId) return;
   $("cropPick").innerHTML = CAT.crops.map(c =>
@@ -18,21 +17,48 @@ function renderPickers(cropId, phaseId) {
   ).join("");
 }
 
+function updateThresholdsUI(cropId, phaseId) {
+  if (!CAT || !cropId || !phaseId) return;
+  const crop = CAT.crops.find(c => c.id === cropId);
+  const phase = CAT.phases.find(p => p.id === phaseId);
+  if (crop) {
+    text("cropName", crop.icon + " " + crop.label);
+    const m = crop.moisture && crop.moisture[phaseId];
+    if (m) {
+      text("thMin", m.min + " %");
+      text("thMax", m.max + " %");
+      $("mkMin").style.left = m.min + "%";
+      $("mkMax").style.left = m.max + "%";
+    }
+  }
+  if (phase) {
+    text("phaseName", phase.label);
+  }
+}
+
 document.addEventListener("click", async e => {
   const b = e.target.closest(".chip");
   if (!b) return;
-  // Détection explicite : le chip a-t-il l'attribut data-crop ou data-phase ?
   const isCrop  = b.hasAttribute("data-crop");
   const isPhase = b.hasAttribute("data-phase");
   if (!isCrop && !isPhase) return;
-  if (isCrop)  CUR.crop  = b.dataset.crop;
-  if (isPhase) CUR.phase = b.dataset.phase;
-  if (!CUR.crop || !CUR.phase) return;
-  // Mise à jour visuelle immédiate (réponse instantanée au clic)
+
+  const nextCrop = isCrop ? b.dataset.crop : (CUR.crop || "tomate");
+  const nextPhase = isPhase ? b.dataset.phase : (CUR.phase || "croissance");
+
+  CUR.crop = nextCrop;
+  CUR.phase = nextPhase;
+
+  // Mise à jour visuelle immédiate (boutons + libellés + seuils)
   renderPickers(CUR.crop, CUR.phase);
+  updateThresholdsUI(CUR.crop, CUR.phase);
+
   pendingSettings = true;
-  await post("/api/settings", { crop: CUR.crop, phase: CUR.phase });
-  pendingSettings = false;
+  try {
+    await post("/api/settings", { crop: CUR.crop, phase: CUR.phase });
+  } finally {
+    pendingSettings = false;
+  }
   refresh();
 });
 
@@ -98,22 +124,22 @@ async function refresh() {
     if (!r.ok) throw Error("API");
     const d = await r.json();
     if (seq !== refreshSeq) return;
-    // On ne met à jour crop/phase depuis le serveur que si aucun clic utilisateur n'est en attente
+    // On ne met à jour crop/phase et seuils depuis le serveur que si aucun clic utilisateur n'est en attente
     if (!pendingSettings) {
       CUR.crop = d.crop.id; CUR.phase = d.phase.id;
       renderPickers(CUR.crop, CUR.phase);
+      text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
+      text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
+      $("mkMin").style.left = d.moisture.min + "%"; $("mkMax").style.left = d.moisture.max + "%";
     }
     const v = d.values, nut = Object.fromEntries(d.nutrients.map(x => [x.key, x]));
     text("parcel", d.parcel);
-    text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
-    text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
     $("soilStatus").textContent = d.moisture.status.toUpperCase(); $("soilStatus").className = "st " + d.moisture.status;
     text("soil", fmt(v.soil_moisture)); text("temp", fmt(v.air_temperature)); text("air", fmt(v.air_humidity));
     text("ph", fmt(nut.ph.value)); text("salinity", fmt(nut.salinity.value)); text("rain", v.rain + " mm");
     text("phRange", `Cible ${nut.ph.min}–${nut.ph.max}`); text("salRange", `Maximum ${nut.salinity.max} dS/m`);
     badgeSrc("src-soil", d.sources.soil_moisture); badgeSrc("src-temp", d.sources.air_temperature); badgeSrc("src-air", d.sources.air_humidity);
     $("soilbar").style.width = Math.max(0, Math.min(100, v.soil_moisture)) + "%";
-    $("mkMin").style.left = d.moisture.min + "%"; $("mkMax").style.left = d.moisture.max + "%";
     const hybrid = d.mode === "hybride";
     text("mode", hybrid ? "Capteurs ESP32 détectés · Mode hybride" : "Mode simulation active");
     text("modeText", hybrid ? "Sol et air réels · reste simulé : pH, salinité, NPK, pluie, pompe" : "Aucune mesure ESP32 récente · toutes les valeurs sont simulées");
