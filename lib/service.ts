@@ -40,10 +40,16 @@ async function notify(st: SimState, now: number, kind: string, level: string, ti
   }
 }
 
-export async function snapshot() {
+export async function snapshot(preferredCrop?: string, preferredPhase?: string) {
   return db.withLock(async () => {
     const now = Date.now() / 1000;
     const st = await load(now);
+    if (preferredCrop && CROPS[preferredCrop]) {
+      st.crop = preferredCrop;
+    }
+    if (preferredPhase && phaseIds().includes(preferredPhase as never)) {
+      st.phase = preferredPhase;
+    }
     const real = await freshEsp32(now);
     const wasMode = st.mode;
     advance(st, now, real);

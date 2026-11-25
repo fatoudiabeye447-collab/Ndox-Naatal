@@ -6,8 +6,8 @@
   "state": {
     "sim": {
       "parcel": "Parcelle de Miss",
-      "crop": "tomate",
-      "phase": "croissance",
+      "crop": "riz",
+      "phase": "floraison",
       "soil": 65,
       "temp": 28,
       "air": 65,

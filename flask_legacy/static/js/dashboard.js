@@ -1,4 +1,4 @@
-let chart, CAT, CUR = { crop: null, phase: null }, HIST = [], refreshSeq = 0, pendingSettings = false;
+let chart, CAT, CUR = { crop: localStorage.getItem("ndox_crop") || null, phase: localStorage.getItem("ndox_phase") || null }, HIST = [], refreshSeq = 0, pendingSettings = false;
 const $ = id => document.getElementById(id);
 const text = (id, v) => { $(id).textContent = v };
 const fmt = n => Number(n).toFixed(1);
@@ -48,6 +48,10 @@ document.addEventListener("click", async e => {
 
   CUR.crop = nextCrop;
   CUR.phase = nextPhase;
+  try {
+    localStorage.setItem("ndox_crop", nextCrop);
+    localStorage.setItem("ndox_phase", nextPhase);
+  } catch (e) {}
 
   // Mise à jour visuelle immédiate (boutons + libellés + seuils)
   renderPickers(CUR.crop, CUR.phase);
@@ -123,17 +127,33 @@ $("readAll").addEventListener("click", async () => { await post("/api/notificati
 async function refresh() {
   const seq = ++refreshSeq;
   try {
-    const [r, h, n] = await Promise.all([fetch("/api/dashboard", { cache: "no-store" }), fetch("/api/history?limit=60"), fetch("/api/notifications")]);
+    const cropParam = CUR.crop ? `&crop=${encodeURIComponent(CUR.crop)}` : "";
+    const phaseParam = CUR.phase ? `&phase=${encodeURIComponent(CUR.phase)}` : "";
+    const [r, h, n] = await Promise.all([
+      fetch(`/api/dashboard?_t=${Date.now()}${cropParam}${phaseParam}`, { cache: "no-store" }),
+      fetch("/api/history?limit=60", { cache: "no-store" }),
+      fetch("/api/notifications", { cache: "no-store" })
+    ]);
     if (!r.ok) throw Error("API");
     const d = await r.json();
     if (seq !== refreshSeq) return;
-    // On ne met à jour crop/phase et seuils depuis le serveur que si aucun clic utilisateur n'est en attente
+    // On conserve la sélection locale persistée si l'utilisateur a choisi une culture/phase
     if (!pendingSettings) {
-      CUR.crop = d.crop.id; CUR.phase = d.phase.id;
-      renderPickers(CUR.crop, CUR.phase);
-      text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
-      text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
-      $("mkMin").style.left = d.moisture.min + "%"; $("mkMax").style.left = d.moisture.max + "%";
+      if (CUR.crop && CUR.phase) {
+        // L'utilisateur a déjà une préférence enregistrée
+        renderPickers(CUR.crop, CUR.phase);
+        updateThresholdsUI(CUR.crop, CUR.phase);
+      } else {
+        CUR.crop = d.crop.id; CUR.phase = d.phase.id;
+        try {
+          localStorage.setItem("ndox_crop", CUR.crop);
+          localStorage.setItem("ndox_phase", CUR.phase);
+        } catch (e) {}
+        renderPickers(CUR.crop, CUR.phase);
+        text("cropName", d.crop.icon + " " + d.crop.label); text("phaseName", d.phase.label);
+        text("thMin", d.moisture.min + " %"); text("thMax", d.moisture.max + " %");
+        $("mkMin").style.left = d.moisture.min + "%"; $("mkMax").style.left = d.moisture.max + "%";
+      }
     }
     const v = d.values, nut = Object.fromEntries(d.nutrients.map(x => [x.key, x]));
     text("parcel", d.parcel);
